@@ -1,0 +1,2 @@
+# ayanokoji-bot
+Bot
