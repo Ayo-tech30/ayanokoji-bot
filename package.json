@@ -1,0 +1,16 @@
+{
+  "name": "ayanokoji-bot",
+  "version": "2.0.0",
+  "description": "WhatsApp Bot with Pairing Code",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "dependencies": {
+    "whatsapp-web.js": "^1.23.0",
+    "axios": "^1.6.0"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}
