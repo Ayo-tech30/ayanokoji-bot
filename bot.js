@@ -1348,3 +1348,402 @@ ID: ${c.id.toString().slice(-8)}`);
             group.leave = false;
             await msg.reply('✅ Leave messages OFF!');
                   }
+        saveData();
+    },
+    
+    setleave: async (msg, args) => {
+        const chat = await msg.getChat();
+        if (!chat.isGroup) return msg.reply('❌ Groups only!');
+        if (!args[0]) return msg.reply('Usage: .setleave [message]');
+        
+        const group = getGroup(chat.id._serialized);
+        group.leaveMsg = args.join(' ');
+        saveData();
+        await msg.reply('✅ Leave message set!');
+    },
+    
+    purge: async (msg) => await msg.reply('🗑️ Purge: Coming soon!'),
+    
+    blacklist: async (msg, args) => {
+        const chat = await msg.getChat();
+        if (!chat.isGroup) return msg.reply('❌ Groups only!');
+        
+        const mentions = await msg.getMentions();
+        if (!mentions[0]) return msg.reply('❌ Tag someone!');
+        
+        const group = getGroup(chat.id._serialized);
+        const userId = mentions[0].id._serialized;
+        
+        if (args[0] === 'add') {
+            if (!group.blacklist.includes(userId)) {
+                group.blacklist.push(userId);
+                await msg.reply('✅ Blacklisted!');
+            }
+        } else if (args[0] === 'remove') {
+            group.blacklist = group.blacklist.filter(id => id !== userId);
+            await msg.reply('✅ Removed from blacklist!');
+        } else {
+            await msg.reply('Usage: .blacklist [add/remove] @user');
+        }
+        saveData();
+    },
+    
+    promote: async (msg) => {
+        const chat = await msg.getChat();
+        if (!chat.isGroup) return msg.reply('❌ Groups only!');
+        
+        const mentions = await msg.getMentions();
+        if (!mentions[0]) return msg.reply('❌ Tag someone!');
+        
+        try {
+            await chat.promoteParticipants([mentions[0].id._serialized]);
+            await msg.reply('✅ Promoted to admin!');
+        } catch {
+            await msg.reply('❌ Failed! Need admin.');
+        }
+    },
+    
+    demote: async (msg) => {
+        const chat = await msg.getChat();
+        if (!chat.isGroup) return msg.reply('❌ Groups only!');
+        
+        const mentions = await msg.getMentions();
+        if (!mentions[0]) return msg.reply('❌ Tag someone!');
+        
+        try {
+            await chat.demoteParticipants([mentions[0].id._serialized]);
+            await msg.reply('✅ Demoted!');
+        } catch {
+            await msg.reply('❌ Failed! Need admin.');
+        }
+    },
+    
+    mute: async (msg, args) => {
+        const chat = await msg.getChat();
+        if (!chat.isGroup) return msg.reply('❌ Groups only!');
+        
+        const mentions = await msg.getMentions();
+        if (!mentions[0]) return msg.reply('❌ Tag someone!');
+        
+        const group = getGroup(chat.id._serialized);
+        const userId = mentions[0].id._serialized;
+        
+        if (!group.muted.includes(userId)) {
+            group.muted.push(userId);
+            await msg.reply('✅ Muted!');
+        }
+        saveData();
+    },
+    
+    unmute: async (msg) => {
+        const chat = await msg.getChat();
+        if (!chat.isGroup) return msg.reply('❌ Groups only!');
+        
+        const mentions = await msg.getMentions();
+        if (!mentions[0]) return msg.reply('❌ Tag someone!');
+        
+        const group = getGroup(chat.id._serialized);
+        const userId = mentions[0].id._serialized;
+        
+        group.muted = group.muted.filter(id => id !== userId);
+        await msg.reply('✅ Unmuted!');
+        saveData();
+    },
+    
+    hidetag: async (msg, args) => {
+        const chat = await msg.getChat();
+        if (!chat.isGroup) return msg.reply('❌ Groups only!');
+        
+        const text = args.join(' ') || 'Hidden tag!';
+        const mentions = [];
+        
+        for (const p of chat.participants) {
+            mentions.push(await client.getContactById(p.id._serialized));
+        }
+        
+        await chat.sendMessage(text, { mentions });
+    },
+    
+    tagall: async (msg) => {
+        const chat = await msg.getChat();
+        if (!chat.isGroup) return msg.reply('❌ Groups only!');
+        
+        let text = '╭─── ◈ TAGALL ◈ ───╮\n';
+        const mentions = [];
+        
+        for (const p of chat.participants) {
+            const contact = await client.getContactById(p.id._serialized);
+            mentions.push(contact);
+            text += `║ @${p.id.user}\n`;
+        }
+        text += '╰━━━━━━━━━━━━━━━━━╯';
+        
+        await chat.sendMessage(text, { mentions });
+    },
+    
+    activity: async (msg) => {
+        const chat = await msg.getChat();
+        if (!chat.isGroup) return msg.reply('❌ Groups only!');
+        
+        const group = getGroup(chat.id._serialized);
+        const sorted = Object.entries(group.activity)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10);
+        
+        if (sorted.length === 0) return msg.reply('📊 No activity data yet!');
+        
+        let text = '╭─── ◈ TOP ACTIVE ◈ ───╮\n';
+        for (const [userId, count] of sorted) {
+            try {
+                const contact = await client.getContactById(userId);
+                const name = contact.pushname || contact.number;
+                text += `║ ${name}: ${count} msgs\n`;
+            } catch {
+                text += `║ Unknown: ${count} msgs\n`;
+            }
+        }
+        text += '╰━━━━━━━━━━━━━━━━━╯';
+        await msg.reply(text);
+    },
+    
+    active: async (msg) => await commands.activity(msg),
+    
+    inactive: async (msg) => {
+        const chat = await msg.getChat();
+        if (!chat.isGroup) return msg.reply('❌ Groups only!');
+        
+        const group = getGroup(chat.id._serialized);
+        const allMembers = chat.participants.map(p => p.id._serialized);
+        const activeMembers = Object.keys(group.activity);
+        const inactive = allMembers.filter(id => !activeMembers.includes(id));
+        
+        if (inactive.length === 0) return msg.reply('✅ Everyone is active!');
+        
+        let text = '╭─── ◈ INACTIVE ◈ ───╮\n';
+        for (const userId of inactive.slice(0, 10)) {
+            try {
+                const contact = await client.getContactById(userId);
+                const name = contact.pushname || contact.number;
+                text += `║ ${name}\n`;
+            } catch {
+                text += `║ Unknown\n`;
+            }
+        }
+        text += `╰━━━━━━━━━━━━━━━━━╯\nTotal: ${inactive.length}`;
+        await msg.reply(text);
+    },
+    
+    open: async (msg) => {
+        const chat = await msg.getChat();
+        if (!chat.isGroup) return msg.reply('❌ Groups only!');
+        
+        try {
+            await chat.setMessagesAdminsOnly(false);
+            await msg.reply('✅ Group opened!');
+        } catch {
+            await msg.reply('❌ Failed! Need admin.');
+        }
+    },
+    
+    close: async (msg) => {
+        const chat = await msg.getChat();
+        if (!chat.isGroup) return msg.reply('❌ Groups only!');
+        
+        try {
+            await chat.setMessagesAdminsOnly(true);
+            await msg.reply('🔒 Group closed!');
+        } catch {
+            await msg.reply('❌ Failed! Need admin.');
+        }
+    },
+    
+    ttt: async (msg) => await msg.reply('❌ Tic-tac-toe coming soon!'),
+    startbattle: async (msg) => await msg.reply('⚔️ Battle system coming soon!'),
+    akinator: async (msg) => await msg.reply('🧞 Akinator coming soon!'),
+    aki: async (msg) => commands.akinator(msg),
+    greekgod: async (msg) => await msg.reply('⚡ Greek God game coming soon!'),
+    gg: async (msg) => commands.greekgod(msg),
+    c4: async (msg) => await msg.reply('🔴 Connect 4 coming soon!'),
+    wcg: async (msg) => await msg.reply('🎮 Word Chain Game coming soon!'),
+    chess: async (msg) => await msg.reply('♟️ Chess coming soon!'),
+    
+    support: async (msg) => {
+        await msg.reply(`╭─── ◈ SUPPORT ◈ ───╮
+║ 👤 Creator: ${CREATOR}
+║ 🤖 Bot: ${BOT_NAME}
+║ 📧 Contact: [Your contact]
+╰━━━━━━━━━━━━━━━━━╯`);
+    }
+};
+
+// PAIRING CODE HANDLER
+let pairingCodeRequested = false;
+
+client.on('qr', async () => {
+    if (!pairingCodeRequested) {
+        const phoneNumber = process.env.PHONE_NUMBER;
+        
+        if (phoneNumber) {
+            try {
+                console.log('╭━━━━━━━━━━━━━━━━━━━━━━━╮');
+                console.log('║  REQUESTING PAIRING   ║');
+                console.log('║       CODE...         ║');
+                console.log('╰━━━━━━━━━━━━━━━━━━━━━━━╯');
+                
+                const code = await client.requestPairingCode(phoneNumber);
+                
+                console.log('');
+                console.log('╭━━━━━━━━━━━━━━━━━━━━━━━╮');
+                console.log('║   YOUR PAIRING CODE   ║');
+                console.log('║                       ║');
+                console.log(`║      ${code}          ║`);
+                console.log('║                       ║');
+                console.log('╰━━━━━━━━━━━━━━━━━━━━━━━╯');
+                console.log('');
+                console.log('📱 Steps to link:');
+                console.log('1. Open WhatsApp');
+                console.log('2. Settings → Linked Devices');
+                console.log('3. Link a Device');
+                console.log('4. Link with phone number instead');
+                console.log(`5. Enter: ${code}`);
+                console.log('');
+                
+                pairingCodeRequested = true;
+            } catch (error) {
+                console.error('❌ Pairing code error:', error);
+                console.log('Make sure PHONE_NUMBER env var is set correctly!');
+            }
+        } else {
+            console.log('╭━━━━━━━━━━━━━━━━━━━━━━━╮');
+            console.log('║  PHONE NUMBER NEEDED  ║');
+            console.log('╰━━━━━━━━━━━━━━━━━━━━━━━╯');
+            console.log('');
+            console.log('❌ PHONE_NUMBER environment variable not set!');
+            console.log('');
+            console.log('Set it with your WhatsApp number:');
+            console.log('Example: export PHONE_NUMBER=1234567890');
+            console.log('(Include country code, no + sign)');
+            console.log('');
+        }
+    }
+});
+
+// Message handler
+client.on('message', async (msg) => {
+    try {
+        const chat = await msg.getChat();
+        const body = msg.body.trim();
+        
+        if (chat.isGroup) {
+            const group = getGroup(chat.id._serialized);
+            if (!group.activity[msg.from]) group.activity[msg.from] = 0;
+            group.activity[msg.from]++;
+            
+            if (group.muted.includes(msg.from)) {
+                await msg.delete(true);
+                return;
+            }
+            
+            if (group.antilink && (body.includes('chat.whatsapp.com') || body.includes('wa.me'))) {
+                const participant = chat.participants.find(p => p.id._serialized === msg.from);
+                
+                if (participant && !participant.isAdmin) {
+                    await msg.reply('⚠️ Links not allowed!');
+                    await msg.delete(true);
+                    
+                    if (group.antilinkAction === 'kick') {
+                        try {
+                            await chat.removeParticipants([msg.from]);
+                        } catch {}
+                    }
+                    return;
+                }
+            }
+        }
+        
+        if (!body.startsWith(PREFIX)) return;
+        
+        const args = body.slice(PREFIX.length).trim().split(/ +/);
+        const commandName = args.shift().toLowerCase();
+        
+        if (commands[commandName]) {
+            console.log(`[CMD] ${commandName} by ${msg.from}`);
+            await commands[commandName](msg, args);
+            
+            const user = getUser(msg.from);
+            user.xp += 10;
+            if (user.xp >= user.level * 100) {
+                user.level++;
+                user.xp = 0;
+                await msg.reply(`🎉 Level ${user.level}!`);
+            }
+            saveData();
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        await msg.reply('❌ Error occurred!');
+    }
+});
+
+// Group events
+client.on('group_join', async (notification) => {
+    try {
+        const chat = await notification.getChat();
+        const group = getGroup(chat.id._serialized);
+        
+        if (group.welcome) {
+            const contact = await client.getContactById(notification.id.participant);
+            const welcomeMsg = group.welcomeMsg.replace('@user', `@${contact.number}`);
+            await chat.sendMessage(welcomeMsg, { mentions: [contact] });
+        }
+    } catch (e) {
+        console.error('Welcome error:', e);
+    }
+});
+
+client.on('group_leave', async (notification) => {
+    try {
+        const chat = await notification.getChat();
+        const group = getGroup(chat.id._serialized);
+        
+        if (group.leave) {
+            const contact = await client.getContactById(notification.id.participant);
+            const leaveMsg = group.leaveMsg.replace('@user', `@${contact.number}`);
+            await chat.sendMessage(leaveMsg);
+        }
+    } catch (e) {
+        console.error('Leave error:', e);
+    }
+});
+
+client.on('ready', () => {
+    console.log('╭━━ ✦彡  𝚴𝚵𝚾𝚯𝚪𝚫  彡✦ ━━╮');
+    console.log('║    BOT IS READY!     ║');
+    console.log(`║  Prefix: ${PREFIX}            ║`);
+    console.log(`║  Creator: ${CREATOR}        ║`);
+    console.log('╰━━━━━━━━━━━━━━━━━━━━━╯');
+    loadData();
+});
+
+client.on('auth_failure', () => {
+    console.error('❌ Authentication failed!');
+});
+
+client.on('disconnected', (reason) => {
+    console.log('⚠️ Disconnected:', reason);
+});
+
+setInterval(saveData, 300000);
+
+process.on('SIGINT', () => {
+    console.log('\n💾 Saving data...');
+    saveData();
+    console.log('👋 Shutting down...');
+    process.exit(0);
+});
+
+client.initialize();
+
+console.log('╭━━━━━━━━━━━━━━━━━━━━╮');
+console.log('║  🚀 STARTING BOT   ║');
+console.log('╰━━━━━━━━━━━━━━━━━━━━╯');
